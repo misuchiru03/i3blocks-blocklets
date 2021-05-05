@@ -5,11 +5,10 @@
 # https://ph.dtf.wtf/w/wtfpl/#version-3-1 for more details.
 
 # Displays the default device, volume, and mute status for i3blocks
-# Requires font-awesome5-pro for current setup. Use custom icons
-# if you want.
-
-# It works so far, but I have not tested bluetooth sinks or
-# additional audio devices and switching sinks (I only use one).
+# Required pkgs (voidlinux) are:
+#	pipewire
+#	pamixer
+#	pulseaudio-utils
 
 AUDIO_HIGH_SYMBOL=' '
 
@@ -26,8 +25,10 @@ AUDIO_MUTED_SYMBOL=' '
 
 AUDIO_INTERVAL=1
 
-DEFAULT_COLOR="#ffffff"
-MUTED_COLOR="#a0a0a0"
+DEFAULT_COLOR="#00FF00"
+#DEFAULT_COLOR="#FFFFFF"
+MUTED_COLOR="#FF0000"
+#MUTED_COLOR="#a0a0a0"
 
 LONG_FORMAT=1
 SHORT_FORMAT=0
@@ -54,15 +55,12 @@ while getopts F:f:pdH:M:L:X:T:t:C:c:i:h opt; do
 	esac
 done
 
-#Done
 function move_sinks_to_new_default {
 	DEFAULT_SINK=$1
-	pamixer --list-sinks | grep -EoA1 "(^[0-9]{2})" | while read SINK
-	do
-		pamixer --sink $SINK
+	pactl info | grep 'Default Sink' | while read SINK; do
+		pactl set-default-sink $SINK
 	done
 }
-#
 
 function print_format {
 	[[ $USE_PERCENT == 0 ]] && PERCENT=""
@@ -75,14 +73,18 @@ function print_format {
 }
 
 function print_block {
-	for name in INDEX NAME; do
+	for name in NAME; do
 		read $name
-	done < <(pamixer --list-sinks | tail -n +1)
-	INDEX=$(echo "$INDEX" | grep -Eo "(^[0-9]{2})")
+	done < <(pactl info | grep 'Default Sink:')
+	NAME=$(echo "$NAME" | awk '{print $3}')
+	DESCRIPTION=$(pactl list sinks | grep -B2 -A1 "$NAME$" | grep Description | cut -f2- -d\ )
+	INDEX=$(pactl list sinks | grep -B2 -A1 "$NAME$" | grep Sink | cut -f2 -d\#)
+	
+	if [[ $USE_DESCRIPTION == 1 ]]; then
+		NAME="$DESCRIPTION"
+	fi
 
-	NAME=$(echo "$NAME" | cut -f4 -d\")
-
-	[[ $USE_PERCENT == 1 ]] && VOL=$(pamixer --get-volume-human) || VOL=$(pamixer --get-volume)
+	[[ $USE_PERCENT == 1 ]] && VOL="$(pamixer --get-volume-human)" || VOL=$(pamixer --get-volume)
 	
 	MUTED=$(pamixer --get-mute)
 
@@ -99,6 +101,7 @@ function print_block {
 
 	if [[ $SUBSCRIBE == 1 ]] ; then
 		print_format "$LONG_FORMAT"
+		echo "$COLOR"
 	else
 		print_format "$LONG_FORMAT"
 		print_format "$SHORT_FORMAT"
